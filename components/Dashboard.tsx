@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { Complaint, ComplaintStatus, User, UserRole, Priority } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Search, Filter, AlertTriangle, MapPin } from 'lucide-react';
+import { Search, Filter, AlertTriangle, MapPin, Download, FileSpreadsheet } from 'lucide-react';
 import { IncidentMap } from './IncidentMap';
+import { exportToPDF, exportToExcel } from '../services/exportUtils';
 
 interface DashboardProps {
   complaints: Complaint[];
@@ -159,6 +160,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ complaints, user, onSelect
                    <option key={s} value={s}>{s}</option>
                  ))}
                </select>
+             </div>
+             
+             <div className="flex gap-2 border-l pl-2 border-slate-200 ml-2">
+               <button
+                 onClick={() => exportToPDF(filteredComplaints, user)}
+                 className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium border border-red-200"
+                 title="Export to PDF"
+               >
+                 <Download size={16} />
+                 <span className="hidden lg:inline">PDF</span>
+               </button>
+               <button
+                 onClick={() => exportToExcel(filteredComplaints, user)}
+                 className="flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium border border-green-200"
+                 title="Export to Excel"
+               >
+                 <FileSpreadsheet size={16} />
+                 <span className="hidden lg:inline">Excel</span>
+               </button>
              </div>
           </div>
         </div>
