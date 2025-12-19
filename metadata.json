@@ -1,0 +1,7 @@
+{
+  "name": "DCMS - Disaster Complaint Management",
+  "description": "A centralized platform for citizens to lodge disaster-related complaints and for authorities to manage, analyze, and resolve them efficiently.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
