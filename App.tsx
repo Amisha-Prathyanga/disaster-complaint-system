@@ -3,59 +3,85 @@ import { Layout } from './components/Layout';
 import { ComplaintForm } from './components/ComplaintForm';
 import { Dashboard } from './components/Dashboard';
 import { ComplaintDetailModal } from './components/ComplaintDetailModal';
-import { INITIAL_COMPLAINTS, MOCK_USERS } from './services/mockData';
+import { api } from './services/api';
 import { Complaint, User, UserRole } from './types';
-import { Lock, User as UserIcon } from 'lucide-react';
+import { Lock, User as UserIcon, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   // Global State
-  const [complaints, setComplaints] = useState<Complaint[]>(INITIAL_COMPLAINTS);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   // Navigation State
   const [view, setView] = useState<'HOME' | 'SUBMIT' | 'LOGIN' | 'DASHBOARD'>('HOME');
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [submissionSuccess, setSubmissionSuccess] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   // Login Form State
-  const [loginRole, setLoginRole] = useState<UserRole>(UserRole.OFFICER);
-  const [loginDsd, setLoginDsd] = useState<string>('Colombo');
-  
-  // Handlers
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Simple Mock Login Logic
-    if (loginRole === UserRole.ADMIN) {
-      setCurrentUser(MOCK_USERS[0]);
-    } else {
-      // Create officer user with selected DSD
-      const officerUser: User = {
-        id: `officer_${loginDsd.toLowerCase()}`,
-        name: `Officer ${loginDsd}`,
-        role: UserRole.OFFICER,
-        dsd: loginDsd
-      };
-      setCurrentUser(officerUser); 
+  const [loginUsername, setLoginUsername] = useState('admin');
+  const [loginPassword, setLoginPassword] = useState('admin123');
+
+  // Load complaints when dashboard is viewed or user changes
+  useEffect(() => {
+    if (currentUser) {
+      loadComplaints();
     }
-    setView('DASHBOARD');
+  }, [currentUser]);
+
+  const loadComplaints = async () => {
+    if (!currentUser) return;
+    setIsLoading(true);
+    const data = await api.getComplaints(currentUser);
+    setComplaints(data);
+    setIsLoading(false);
   };
 
-  const handleComplaintSubmit = (data: Partial<Complaint>) => {
-    const newId = `CMP-2023-${String(complaints.length + 1).padStart(3, '0')}`;
-    const newComplaint: Complaint = {
-      ...data as Complaint,
+  // Handlers
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsLoading(true);
+    
+    const user = await api.login(loginUsername, loginPassword);
+    
+    if (user) {
+      setCurrentUser(user);
+      setView('DASHBOARD');
+    } else {
+      setLoginError('Invalid username or password');
+    }
+    setIsLoading(false);
+  };
+
+  const handleComplaintSubmit = async (data: Partial<Complaint>) => {
+    const newId = `CMP-2023-${String(Date.now()).slice(-6)}`;
+    const newComplaint = {
+      ...data,
       id: newId,
       remarks: [],
     };
-    setComplaints([newComplaint, ...complaints]);
-    setSubmissionSuccess(newId);
-    setView('HOME');
+    
+    const success = await api.createComplaint(newComplaint);
+    
+    if (success) {
+      setSubmissionSuccess(newId);
+      setView('HOME');
+    } else {
+      alert('Failed to submit complaint. Please try again.');
+    }
   };
 
-  const handleUpdateComplaint = (updated: Complaint) => {
-    setComplaints(prev => prev.map(c => c.id === updated.id ? updated : c));
-    if (selectedComplaint && selectedComplaint.id === updated.id) {
-      setSelectedComplaint(updated);
+  const handleUpdateComplaint = async (updated: Complaint) => {
+    const success = await api.updateComplaint(updated.id, updated);
+    if (success) {
+      setComplaints(prev => prev.map(c => c.id === updated.id ? updated : c));
+      if (selectedComplaint && selectedComplaint.id === updated.id) {
+        setSelectedComplaint(updated);
+      }
+    } else {
+      alert('Failed to update complaint');
     }
   };
 
@@ -116,58 +142,41 @@ const App: React.FC = () => {
           <h2 className="text-2xl font-bold text-slate-900">System Login</h2>
           <p className="text-sm text-slate-500 mt-1">Authorized Personnel Only</p>
         </div>
+        
+        {loginError && (
+          <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 border border-red-200">
+            {loginError}
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Select Role (Simulation)</label>
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                onClick={() => setLoginRole(UserRole.OFFICER)}
-                className={`p-3 rounded-lg border text-sm font-medium transition-colors ${loginRole === UserRole.OFFICER ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-slate-300 text-slate-600'}`}
-              >
-                Officer
-              </button>
-              <button
-                type="button"
-                onClick={() => setLoginRole(UserRole.ADMIN)}
-                className={`p-3 rounded-lg border text-sm font-medium transition-colors ${loginRole === UserRole.ADMIN ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-slate-300 text-slate-600'}`}
-              >
-                Administrator
-              </button>
-            </div>
-          </div>
-          
-          {loginRole === UserRole.OFFICER && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Select Division (DSD)</label>
-              <select
-                value={loginDsd}
-                onChange={(e) => setLoginDsd(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="Colombo">Colombo</option>
-                <option value="Gampaha">Gampaha</option>
-                <option value="Kandy">Kandy</option>
-                <option value="Galle">Galle</option>
-                <option value="Badulla">Badulla</option>
-              </select>
-            </div>
-          )}
-          
-          <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Username</label>
-            <input type="text" disabled value="demo_user" className="w-full px-4 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-500 cursor-not-allowed" />
+            <input 
+              type="text" 
+              value={loginUsername}
+              onChange={(e) => setLoginUsername(e.target.value)}
+              className="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500" 
+              placeholder="e.g. admin or officer_colombo"
+            />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Password</label>
-            <input type="password" disabled value="********" className="w-full px-4 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-500 cursor-not-allowed" />
+            <input 
+              type="password" 
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              className="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500" 
+            />
           </div>
 
           <button
             type="submit"
-            className="w-full bg-slate-900 text-white py-2.5 rounded-lg hover:bg-slate-800 transition-colors font-medium"
+            disabled={isLoading}
+            className="w-full bg-slate-900 text-white py-2.5 rounded-lg hover:bg-slate-800 transition-colors font-medium flex justify-center items-center gap-2"
           >
-            Login to Dashboard
+            {isLoading && <Loader2 className="animate-spin h-4 w-4" />}
+            {isLoading ? 'Authenticating...' : 'Login to Dashboard'}
           </button>
         </form>
         <div className="mt-6 text-center">
@@ -203,21 +212,21 @@ const App: React.FC = () => {
       {view === 'LOGIN' && renderLogin()}
 
       {view === 'DASHBOARD' && currentUser && (
-        <Dashboard
-          complaints={complaints}
-          user={currentUser}
-          onSelectComplaint={setSelectedComplaint}
-        />
-      )}
-
-      {/* Modal is global */}
-      {selectedComplaint && currentUser && (
-        <ComplaintDetailModal
-          complaint={selectedComplaint}
-          currentUser={currentUser}
-          onClose={() => setSelectedComplaint(null)}
-          onUpdate={handleUpdateComplaint}
-        />
+        <>
+          <Dashboard 
+            complaints={complaints}
+            user={currentUser}
+            onSelectComplaint={setSelectedComplaint}
+          />
+          {selectedComplaint && (
+            <ComplaintDetailModal
+              complaint={selectedComplaint}
+              currentUser={currentUser}
+              onClose={() => setSelectedComplaint(null)}
+              onUpdate={handleUpdateComplaint}
+            />
+          )}
+        </>
       )}
     </Layout>
   );
