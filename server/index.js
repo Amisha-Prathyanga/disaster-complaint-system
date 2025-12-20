@@ -1,10 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
+import dotenv from 'dotenv';
 import db from './db.js';
+import { sendSMS, sendWhatsApp } from './services/twilio.js';
+
+
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000; // Default to 5000 if not set, to match frontend config
 
 // Middleware
 app.use(cors());
@@ -91,6 +96,35 @@ app.post('/api/complaints', async (req, res) => {
         data.aiAnalysis
       ]
     );
+
+    // --- Send SMS Notifications ---
+    try {
+      // 1. Notify Admin
+      const [adminRows] = await db.query('SELECT phone FROM users WHERE role = "ADMIN"');
+      adminRows.forEach(user => {
+        if (user.phone) {
+          const msg = `New Complaint Alert!\nTitle: ${data.title}\nCategory: ${data.category}\nPriority: ${data.priority || 'Medium'}\nLocation: ${data.location}`;
+          sendSMS(user.phone, msg);
+          sendWhatsApp(user.phone, msg);
+        }
+      });
+
+      // 2. Notify relevant DSD Officer
+      if (data.dsd) {
+        const [officerRows] = await db.query('SELECT phone FROM users WHERE role = "OFFICER" AND dsd = ?', [data.dsd]);
+        officerRows.forEach(user => {
+            if (user.phone) {
+              const msg = `New Assignment Alert!\nYou have a new complaint in ${data.dsd}.\nTitle: ${data.title}\nCategory: ${data.category}\nPriority: ${data.priority || 'Medium'}`;
+              sendSMS(user.phone, msg);
+              sendWhatsApp(user.phone, msg);
+            }
+        });
+      }
+    } catch (notifyErr) {
+      console.error('Error sending notifications:', notifyErr);
+      // Proceed without failing the request
+    }
+
     res.json({ success: true, id: data.id });
   } catch (err) {
     console.error(err);
@@ -112,6 +146,31 @@ app.put('/api/complaints/:id', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Failed to update complaint' });
+  }
+});
+
+// Public Endpoint for Tracking
+app.get('/api/public/complaints/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [rows] = await db.query('SELECT * FROM complaints WHERE id = ?', [id]);
+    if (rows.length > 0) {
+      const c = rows[0];
+      // Return only non-sensitive info
+      const publicData = {
+        id: c.id,
+        status: c.status,
+        priority: c.priority, // Optional, maybe helpful
+        createdAt: c.created_at,
+        remarks: typeof c.remarks === 'string' ? JSON.parse(c.remarks || '[]') : c.remarks
+      };
+      res.json({ success: true, data: publicData });
+    } else {
+      res.status(404).json({ success: false, message: 'Complaint not found' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 

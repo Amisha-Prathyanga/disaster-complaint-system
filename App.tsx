@@ -5,7 +5,9 @@ import { Dashboard } from './components/Dashboard';
 import { ComplaintDetailModal } from './components/ComplaintDetailModal';
 import { api } from './services/api';
 import { Complaint, User, UserRole } from './types';
-import { Lock, User as UserIcon, Loader2 } from 'lucide-react';
+import { Lock, User as UserIcon, Loader2, Search } from 'lucide-react';
+import { TrackingPortal } from './components/TrackingPortal';
+import toast, { Toaster } from 'react-hot-toast';
 
 const App: React.FC = () => {
   // Global State
@@ -13,7 +15,7 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   // Navigation State
-  const [view, setView] = useState<'HOME' | 'SUBMIT' | 'LOGIN' | 'DASHBOARD'>('HOME');
+  const [view, setView] = useState<'HOME' | 'SUBMIT' | 'LOGIN' | 'DASHBOARD' | 'TRACK'>('HOME');
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [submissionSuccess, setSubmissionSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,19 +45,33 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoginError('');
     setIsLoading(true);
+    const toastId = toast.loading('Authenticating...');
     
     const user = await api.login(loginUsername, loginPassword);
     
     if (user) {
+      toast.success(`Welcome back, ${user.name}!`, { id: toastId });
       setCurrentUser(user);
       setView('DASHBOARD');
     } else {
+      toast.error('Invalid username or password', { id: toastId });
       setLoginError('Invalid username or password');
     }
     setIsLoading(false);
   };
 
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to logout?')) {
+      setCurrentUser(null);
+      setView('HOME');
+      toast.success('Logged out successfully');
+    }
+  };
+
   const handleComplaintSubmit = async (data: Partial<Complaint>) => {
+    if (!window.confirm('Are you sure you want to submit this complaint?')) return;
+
+    const toastId = toast.loading('Submitting complaint...');
     const newId = `CMP-2023-${String(Date.now()).slice(-6)}`;
     const newComplaint = {
       ...data,
@@ -66,22 +82,33 @@ const App: React.FC = () => {
     const success = await api.createComplaint(newComplaint);
     
     if (success) {
+      toast.success('Complaint submitted successfully!', { id: toastId });
       setSubmissionSuccess(newId);
       setView('HOME');
     } else {
-      alert('Failed to submit complaint. Please try again.');
+      toast.error('Failed to submit complaint. Please try again.', { id: toastId });
     }
   };
 
   const handleUpdateComplaint = async (updated: Complaint) => {
+    // If status is changing to RESOLVED, ask for extra confirmation
+    if (updated.status === 'Resolved' && selectedComplaint?.status !== 'Resolved') {
+      if (!window.confirm('You are marking this complaint as Resolved. This will close the case. Continue?')) {
+        return;
+      }
+    }
+
+    const toastId = toast.loading('Updating complaint...');
     const success = await api.updateComplaint(updated.id, updated);
+    
     if (success) {
+      toast.success('Complaint updated successfully', { id: toastId });
       setComplaints(prev => prev.map(c => c.id === updated.id ? updated : c));
       if (selectedComplaint && selectedComplaint.id === updated.id) {
         setSelectedComplaint(updated);
       }
     } else {
-      alert('Failed to update complaint');
+      toast.error('Failed to update complaint', { id: toastId });
     }
   };
 
@@ -105,7 +132,8 @@ const App: React.FC = () => {
          </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl px-4">
+        {/* Report Card */}
         <div 
           onClick={() => setView('SUBMIT')}
           className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 hover:shadow-2xl hover:-translate-y-1 transition-all cursor-pointer group"
@@ -115,10 +143,25 @@ const App: React.FC = () => {
           </div>
           <h2 className="text-2xl font-bold text-slate-800 mb-2">Report Incident</h2>
           <p className="text-slate-500">
-            For citizens to report safety issues, infrastructure damage, or request assistance during disasters.
+            For citizens to report safety issues, infrastructure damage, disaster situations.
           </p>
         </div>
 
+        {/* Track Card */}
+        <div 
+          onClick={() => setView('TRACK')}
+          className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 hover:shadow-2xl hover:-translate-y-1 transition-all cursor-pointer group"
+        >
+          <div className="h-14 w-14 bg-green-100 rounded-full flex items-center justify-center mb-6 group-hover:bg-green-600 transition-colors">
+            <Search className="h-7 w-7 text-green-600 group-hover:text-white" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Track Status</h2>
+          <p className="text-slate-500">
+            Check the realtime status of a submitted complaint using your Reference ID.
+          </p>
+        </div>
+
+        {/* Officer Card */}
         <div 
           onClick={() => setView('LOGIN')}
           className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 hover:shadow-2xl hover:-translate-y-1 transition-all cursor-pointer group"
@@ -191,10 +234,11 @@ const App: React.FC = () => {
   return (
     <Layout
       user={currentUser}
-      onLogout={() => { setCurrentUser(null); setView('HOME'); }}
+      onLogout={handleLogout}
       onLoginClick={() => setView('LOGIN')}
       onHomeClick={() => setView('HOME')}
     >
+      <Toaster position="top-right" />
       {view === 'HOME' && renderHome()}
       
       {view === 'SUBMIT' && (
@@ -210,6 +254,10 @@ const App: React.FC = () => {
       )}
 
       {view === 'LOGIN' && renderLogin()}
+
+      {view === 'TRACK' && (
+        <TrackingPortal onBack={() => setView('HOME')} />
+      )}
 
       {view === 'DASHBOARD' && currentUser && (
         <>

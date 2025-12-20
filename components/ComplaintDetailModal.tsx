@@ -25,9 +25,19 @@ export const ComplaintDetailModal: React.FC<ComplaintDetailModalProps> = ({
 
   const handleSave = () => {
     const updated = { ...complaint, status: newStatus };
-    if (remarks.trim()) {
-      updated.remarks = [...(updated.remarks || []), `${currentUser.name} (${new Date().toLocaleTimeString()}): ${remarks}`];
+    const newRemarks = [...(updated.remarks || [])];
+
+    // Log status change
+    if (newStatus !== complaint.status) {
+      newRemarks.push(`System: Status changed from '${complaint.status}' to '${newStatus}' by ${currentUser.name} at ${new Date().toLocaleString()}`);
     }
+
+    // Add manual remarks
+    if (remarks.trim()) {
+      newRemarks.push(`${currentUser.name} (${new Date().toLocaleString()}): ${remarks}`);
+    }
+
+    updated.remarks = newRemarks;
     onUpdate(updated);
     onClose();
   };

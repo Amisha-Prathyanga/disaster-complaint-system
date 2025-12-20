@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Complaint, ComplaintStatus, User, UserRole, Priority } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Search, Filter, AlertTriangle, MapPin, Download, FileSpreadsheet } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import { Search, Filter, AlertTriangle, MapPin, Download, FileSpreadsheet, Calendar } from 'lucide-react';
 import { IncidentMap } from './IncidentMap';
 import { exportToPDF, exportToExcel } from '../services/exportUtils';
+import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 
 interface DashboardProps {
   complaints: Complaint[];
@@ -16,33 +17,40 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 export const Dashboard: React.FC<DashboardProps> = ({ complaints, user, onSelectComplaint }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   // Filter complaints based on Role
   const accessibleComplaints = useMemo(() => {
-    console.log('User role:', user.role, 'User DSD:', user.dsd);
-    console.log('Total complaints:', complaints.length);
-    
     if (user.role === UserRole.ADMIN) {
-      console.log('Admin user - showing all complaints');
       return complaints;
     }
-    
-    const filtered = complaints.filter(c => c.dsd === user.dsd);
-    console.log('Officer user - filtered to', filtered.length, 'complaints for DSD:', user.dsd);
-    filtered.forEach(c => console.log('  -', c.id, c.title, 'DSD:', c.dsd, 'Coords:', c.latitude, c.longitude));
-    
-    return filtered;
+    return complaints.filter(c => c.dsd === user.dsd);
   }, [complaints, user]);
 
-  // Apply UI Filters
+  // Apply UI Filters (Search, Status, Date)
   const filteredComplaints = useMemo(() => {
     return accessibleComplaints.filter(c => {
       const matchesSearch = c.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             c.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'All' || c.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      
+      let matchesDate = true;
+      if (startDate && endDate) {
+        const cDate = new Date(c.createdAt);
+        matchesDate = isWithinInterval(cDate, {
+          start: startOfDay(new Date(startDate)),
+          end: endOfDay(new Date(endDate))
+        });
+      } else if (startDate) {
+        matchesDate = new Date(c.createdAt) >= startOfDay(new Date(startDate));
+      } else if (endDate) {
+        matchesDate = new Date(c.createdAt) <= endOfDay(new Date(endDate));
+      }
+
+      return matchesSearch && matchesStatus && matchesDate;
     });
-  }, [accessibleComplaints, searchTerm, statusFilter]);
+  }, [accessibleComplaints, searchTerm, statusFilter, startDate, endDate]);
 
   // Stats Logic
   const stats = useMemo(() => {
@@ -50,14 +58,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ complaints, user, onSelect
     const pending = accessibleComplaints.filter(c => c.status !== ComplaintStatus.RESOLVED && c.status !== ComplaintStatus.REJECTED).length;
     const critical = accessibleComplaints.filter(c => c.priority === Priority.CRITICAL && c.status !== ComplaintStatus.RESOLVED).length;
     
-    // Data for charts
+    // Category Data
     const categoryDataMap: Record<string, number> = {};
     accessibleComplaints.forEach(c => {
       categoryDataMap[c.category] = (categoryDataMap[c.category] || 0) + 1;
     });
     const categoryData = Object.keys(categoryDataMap).map(name => ({ name, value: categoryDataMap[name] }));
 
-    return { total, pending, critical, categoryData };
+    // Trend Data (Last 7 Days)
+    const trendData = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = subDays(new Date(), i);
+      const dayStr = format(date, 'yyyy-MM-dd');
+      const count = accessibleComplaints.filter(c => 
+        format(new Date(c.createdAt), 'yyyy-MM-dd') === dayStr
+      ).length;
+      trendData.push({
+        date: format(date, 'MMM dd'),
+        count: count
+      });
+    }
+
+    return { total, pending, critical, categoryData, trendData };
   }, [accessibleComplaints]);
 
   return (
@@ -121,48 +143,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ complaints, user, onSelect
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-80 flex items-center justify-center text-slate-400">
-            {/* Placeholder for future Trend Analysis Chart */}
-             <div className="text-center">
-               <p className="font-semibold">Trend Analysis</p>
-               <p className="text-sm">Complaint volume over last 7 days</p>
-             </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-80">
+            <h3 className="text-lg font-bold text-slate-800 mb-4">Trend Analysis (Last 7 Days)</h3>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={stats.trendData}>
+                <defs>
+                  <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" />
+                <YAxis allowDecimals={false} />
+                <RechartsTooltip />
+                <Area type="monotone" dataKey="count" stroke="#3b82f6" fillOpacity={1} fill="url(#colorCount)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
 
       {/* Main Content Area */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h3 className="text-lg font-bold text-slate-800">
-            {user.role === UserRole.ADMIN ? 'All Complaints' : `Complaints - ${user.dsd} Division`}
-          </h3>
-          <div className="flex flex-col sm:flex-row gap-3">
-             <div className="relative">
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-               <input 
-                 type="text" 
-                 placeholder="Search ID or Title..." 
-                 className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
-                 value={searchTerm}
-                 onChange={(e) => setSearchTerm(e.target.value)}
-               />
-             </div>
-             <div className="relative">
-               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-               <select 
-                 className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 appearance-none bg-white min-w-[150px]"
-                 value={statusFilter}
-                 onChange={(e) => setStatusFilter(e.target.value)}
-               >
-                 <option value="All">All Status</option>
-                 {Object.values(ComplaintStatus).map(s => (
-                   <option key={s} value={s}>{s}</option>
-                 ))}
-               </select>
-             </div>
-             
-             <div className="flex gap-2 border-l pl-2 border-slate-200 ml-2">
+        <div className="p-6 border-b border-slate-200 flex flex-col gap-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-bold text-slate-800">
+              {user.role === UserRole.ADMIN ? 'All Complaints' : `Complaints - ${user.dsd} Division`}
+            </h3>
+            <div className="flex gap-2">
                <button
                  onClick={() => exportToPDF(filteredComplaints, user)}
                  className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium border border-red-200"
@@ -179,6 +188,54 @@ export const Dashboard: React.FC<DashboardProps> = ({ complaints, user, onSelect
                  <FileSpreadsheet size={16} />
                  <span className="hidden lg:inline">Excel</span>
                </button>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-4 items-center bg-slate-50 p-4 rounded-lg border border-slate-200">
+             <div className="relative flex-1 min-w-[200px]">
+               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+               <input 
+                 type="text" 
+                 placeholder="Search ID or Title..." 
+                 className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 w-full"
+                 value={searchTerm}
+                 onChange={(e) => setSearchTerm(e.target.value)}
+               />
+             </div>
+             
+             <div className="relative">
+               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+               <select 
+                 className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 appearance-none bg-white min-w-[150px]"
+                 value={statusFilter}
+                 onChange={(e) => setStatusFilter(e.target.value)}
+               >
+                 <option value="All">All Status</option>
+                 {Object.values(ComplaintStatus).map(s => (
+                   <option key={s} value={s}>{s}</option>
+                 ))}
+               </select>
+             </div>
+
+             <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="date"
+                    className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    title="Start Date"
+                  />
+                </div>
+                <span className="text-slate-400">-</span>
+                <input
+                  type="date"
+                  className="px-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  title="End Date"
+                />
              </div>
           </div>
         </div>

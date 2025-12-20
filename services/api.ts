@@ -68,5 +68,20 @@ export const api = {
       console.error('Update complaint error:', error);
       return false;
     }
+  },
+
+  // Public Tracking
+  getPublicStatus: async (id: string): Promise<any> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/public/complaints/${id}`);
+      const data = await response.json();
+      if (data.success) {
+        return data.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Tracking error:', error);
+      return null;
+    }
   }
 };

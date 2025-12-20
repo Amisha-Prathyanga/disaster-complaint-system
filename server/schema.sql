@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL, -- Storing plain text for demo as requested, ideally should be hashed
     name VARCHAR(100) NOT NULL,
     role ENUM('ADMIN', 'OFFICER', 'CITIZEN') NOT NULL,
-    dsd VARCHAR(50) -- Nullable, only for officers
+    dsd VARCHAR(50), -- Nullable, only for officers
+    phone VARCHAR(20)
 );
 
 -- Complaints Table
@@ -32,13 +33,13 @@ CREATE TABLE IF NOT EXISTS complaints (
 );
 
 -- Seed Users
-INSERT INTO users (username, password, name, role, dsd) VALUES 
-('admin', 'admin123', 'System Administrator', 'ADMIN', NULL),
-('officer_colombo', 'pass123', 'Officer Colombo', 'OFFICER', 'Colombo'),
-('officer_gampaha', 'pass123', 'Officer Gampaha', 'OFFICER', 'Gampaha'),
-('officer_kandy', 'pass123', 'Officer Kandy', 'OFFICER', 'Kandy'),
-('officer_galle', 'pass123', 'Officer Galle', 'OFFICER', 'Galle'),
-('officer_badulla', 'pass123', 'Officer Badulla', 'OFFICER', 'Badulla')
+INSERT INTO users (username, password, name, role, dsd, phone) VALUES 
+('admin', 'admin123', 'System Administrator', 'ADMIN', NULL, '+94770346212'),
+('officer_colombo', 'pass123', 'Officer Colombo', 'OFFICER', 'Colombo', '+94770346212'),
+('officer_gampaha', 'pass123', 'Officer Gampaha', 'OFFICER', 'Gampaha', '+94770346212'),
+('officer_kandy', 'pass123', 'Officer Kandy', 'OFFICER', 'Kandy', '+94770346212'),
+('officer_galle', 'pass123', 'Officer Galle', 'OFFICER', 'Galle', '+94770346212'),
+('officer_badulla', 'pass123', 'Officer Badulla', 'OFFICER', 'Badulla', '+94770346212')
 ON DUPLICATE KEY UPDATE name=name;
 
 -- Seed Complaints (Sample Data)
