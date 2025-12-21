@@ -72,12 +72,29 @@ app.get('/api/complaints', async (req, res) => {
 
 // DB Connection Test Endpoint
 app.get('/api/test-db', async (req, res) => {
+  const debugInfo = {
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT || 3306,
+    user: process.env.DB_USER,
+    db: process.env.DB_NAME,
+    ssl: process.env.DB_SSL
+  };
   try {
     const [rows] = await db.query('SELECT 1 as val');
-    res.json({ success: true, message: 'Database connected successfully', val: rows[0].val });
+    res.json({ 
+      success: true, 
+      message: 'Database connected successfully', 
+      val: rows[0].val,
+      config: debugInfo 
+    });
   } catch (err) {
     console.error('DB Connection Failed:', err);
-    res.status(500).json({ success: false, message: 'Database connection failed', error: err.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Database connection failed', 
+      error: err.message, 
+      config: debugInfo 
+    });
   }
 });
 
