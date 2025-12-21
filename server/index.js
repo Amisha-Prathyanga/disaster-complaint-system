@@ -70,6 +70,17 @@ app.get('/api/complaints', async (req, res) => {
   }
 });
 
+// DB Connection Test Endpoint
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT 1 as val');
+    res.json({ success: true, message: 'Database connected successfully', val: rows[0].val });
+  } catch (err) {
+    console.error('DB Connection Failed:', err);
+    res.status(500).json({ success: false, message: 'Database connection failed', error: err.message });
+  }
+});
+
 // Create Complaint
 app.post('/api/complaints', async (req, res) => {
   const data = req.body;
@@ -128,7 +139,7 @@ app.post('/api/complaints', async (req, res) => {
     res.json({ success: true, id: data.id });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: 'Failed to create complaint' });
+    res.status(500).json({ success: false, message: 'Failed to create complaint', error: err.message, code: err.code });
   }
 });
 
