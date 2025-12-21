@@ -1,7 +1,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ComplaintCategory, Priority } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+let ai: GoogleGenAI | null = null;
+
+const getAiClient = () => {
+    if (!ai) {
+        const apiKey = import.meta.env.VITE_API_KEY;
+        if (apiKey) {
+            ai = new GoogleGenAI({ apiKey });
+        }
+    }
+    return ai;
+}
 
 interface AnalysisResult {
   priority: Priority;
@@ -15,6 +25,12 @@ export const analyzeComplaintWithGemini = async (
   currentCategory: string
 ): Promise<AnalysisResult> => {
   try {
+    const client = getAiClient();
+    if (!client) {
+         console.warn("Gemini API Key missing. Skipping AI analysis.");
+         throw new Error("API Key missing");
+    }
+
     const prompt = `
       You are an AI assistant for a Disaster Complaint Management System.
       Analyze the following complaint details and determine the priority level (Low, Medium, High, Critical).
@@ -25,7 +41,7 @@ export const analyzeComplaintWithGemini = async (
       Current Category: ${currentCategory}
     `;
 
-    const response = await ai.models.generateContent({
+    const response = await client.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
       config: {
