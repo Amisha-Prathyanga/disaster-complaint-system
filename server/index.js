@@ -117,7 +117,7 @@ app.post('/api/complaints', async (req, res) => {
         data.dsd,
         data.priority || 'Medium',
         data.status || 'New',
-        data.createdAt || new Date(),
+        new Date(data.createdAt || Date.now()).toISOString().slice(0, 19).replace('T', ' '),
         data.contactName,
         data.contactPhone,
         JSON.stringify(data.remarks || []),
