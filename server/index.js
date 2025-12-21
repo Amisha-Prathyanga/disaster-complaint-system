@@ -175,6 +175,10 @@ app.get('/api/public/complaints/:id', async (req, res) => {
 });
 
 // Start Server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT} (0.0.0.0)`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT} (0.0.0.0)`);
+  });
+}
+
+export default app;
