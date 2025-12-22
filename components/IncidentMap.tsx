@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { Complaint, Priority } from '../types';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -56,6 +56,22 @@ interface IncidentMapProps {
   onSelectComplaint: (complaint: Complaint) => void;
 }
 
+// Helper component to fix map rendering issues
+const MapInvalidator = () => {
+  const map = useMap();
+
+  React.useEffect(() => {
+    // Force map to invalidate size after mount to ensure proper rendering
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [map]);
+
+  return null;
+};
+
 export const IncidentMap: React.FC<IncidentMapProps> = ({ complaints, onSelectComplaint }) => {
   // Filter complaints that have coordinates
   const mappableComplaints = complaints.filter(c => c.latitude && c.longitude);
@@ -72,6 +88,7 @@ export const IncidentMap: React.FC<IncidentMapProps> = ({ complaints, onSelectCo
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={true}
       >
+        <MapInvalidator />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
